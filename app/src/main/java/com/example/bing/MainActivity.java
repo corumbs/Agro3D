@@ -6,14 +6,18 @@ import android.bluetooth.BluetoothSocket;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 
+import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.UUID;
 import android.Manifest;
 //libraries
@@ -34,36 +38,37 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_ENABLE_BT = 1;
 
     private boolean bluetoothConnected = false;
-//variables
+
     @Override
-    protected void onCreate(Bundle savedInstanceState) {//O codigo roda por este objeto
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         deviceNameTextView = findViewById(R.id.device_name);
         nmeaDataTextView = findViewById(R.id.nmea_data);
-        //envia os dados para a tela visual
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED ||
                 ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN}, REQUEST_ENABLE_BT);
         } else {
             if (initBluetooth()) {
-                connectToDevice();
-                startListening();
+                if (connectToDevice()) {
+                    startListening();
+                }
             }
         }
-        //checks if it is connected with bluetooth and only runs if it is
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        //se if it has permission to bluetooth
+
         if (requestCode == REQUEST_ENABLE_BT) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && grantResults[1] == PackageManager.PERMISSION_GRANTED) {
                 if (initBluetooth()) {
-                    connectToDevice();
-                    startListening();
+                    if (connectToDevice()) {
+                        startListening();
+                    }
                 }
             } else {
                 // Permission denied
@@ -72,15 +77,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean initBluetooth() {
-        //initiate the bluetooth
         BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         if (bluetoothAdapter == null) {
-            // Device doesn't support Bluetooth
             return false;
         }
 
         if (!bluetoothAdapter.isEnabled()) {
-            // Bluetooth is not enabled
             return false;
         }
 
@@ -90,57 +92,56 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
 
-    private void connectToDevice() {
-        //connect to device
+    private boolean connectToDevice() {
         try {
             socket = device.createRfcommSocketToServiceRecord(PORT_UUID);
             socket.connect();
             bluetoothConnected = true;
+            return true;
         } catch (IOException e) {
             e.printStackTrace();
             bluetoothConnected = false;
+            return false;
         }
     }
 
     private void startListening() {
-        //start to get the nmea data
-        listenThread = new Thread(this::listenForData);
-        listenThread.start();
+        if (bluetoothConnected) {
+            listenThread = new Thread(this::listenForData);
+            listenThread.start();
+        }
     }
 
     private void listenForData() {
         try {
-            //way to get the nmea data
             inputStream = socket.getInputStream();
-            byte[] buffer = new byte[1024];
-            int bytes;
-            String data = "";
+            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
 
-            while (inputStream != null) {
-                try {
-                    bytes = inputStream.read(buffer);
-                    String newData = new String(buffer, 0, bytes);
-                    data += newData;
-
-                    // Find the index of the last complete NMEA sentence in the data
-                    int lastNmeaIndex = data.lastIndexOf("$");
-                    if (lastNmeaIndex != -1) {
-                        // Extract the most recent complete NMEA sentence
-                        String mostRecentNmea = data.substring(lastNmeaIndex);
-                        // Update the UI with the most recent NMEA data
-                        runOnUiThread(() -> nmeaDataTextView.setText(mostRecentNmea));
-                    }
-                } catch (IOException e) {
-                    // An IOException was thrown, so the Bluetooth device is probably disconnected
-                    e.printStackTrace();
-                    inputStream = null;
-                    socket.close();
+            while (bluetoothConnected) {
+                String data = reader.readLine();
+                if (data != null) {
+                    runOnUiThread(() -> nmeaDataTextView.setText(data));
+                } else {
+                    break;
                 }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        bluetoothConnected = false;
+
+        // Reconnect and restart data flow
+        while (!bluetoothConnected) {
+            try {
+                Thread.sleep(1000); // Wait for 1 second before attempting reconnection
+                if (connectToDevice()) {
+                    startListening();
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
     }
-
-
 }
+
