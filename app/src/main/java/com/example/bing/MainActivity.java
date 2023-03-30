@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothSocket;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 
+import android.preference.PreferenceManager;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
@@ -20,6 +21,12 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.UUID;
 import android.Manifest;
+
+import org.osmdroid.api.IMapController;
+import org.osmdroid.config.Configuration;
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
+import org.osmdroid.util.GeoPoint;
+import org.osmdroid.views.MapView;
 //libraries
 
 public class MainActivity extends AppCompatActivity {
@@ -43,6 +50,19 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // Set the user agent
+        Configuration.getInstance().load(this, PreferenceManager.getDefaultSharedPreferences(this));
+        Configuration.getInstance().setUserAgentValue(BuildConfig.APPLICATION_ID);
+
+// Initialize the MapView
+        MapView map = (MapView) findViewById(R.id.map);
+        map.setTileSource(TileSourceFactory.MAPNIK);
+
+        IMapController mapController = map.getController();
+        mapController.setZoom(9.0);
+        GeoPoint startPoint = new GeoPoint( -24.046, -52.3838);
+        mapController.setCenter(startPoint);
 
         deviceNameTextView = findViewById(R.id.device_name);
         nmeaDataTextView = findViewById(R.id.nmea_data);
