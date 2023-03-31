@@ -1,4 +1,4 @@
-package com.example.bing;
+package com.example.agrotracker;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -11,7 +11,6 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -23,12 +22,16 @@ import java.io.InputStreamReader;
 import java.util.UUID;
 import android.Manifest;
 
+import com.example.agrotracker.R;
+
 import org.osmdroid.api.IMapController;
 import org.osmdroid.config.Configuration;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.Marker;
+
+import nmea.BuildConfig;
 
 
 //libraries
@@ -60,7 +63,9 @@ public class MainActivity extends AppCompatActivity {
         Configuration.getInstance().load(this, PreferenceManager.getDefaultSharedPreferences(this));
         Configuration.getInstance().setUserAgentValue(BuildConfig.APPLICATION_ID);
 
-// Initialize the MapView
+
+
+        // Initialize the MapView
         map = (MapView) findViewById(R.id.map);
         map.setTileSource(TileSourceFactory.MAPNIK);
 
@@ -185,7 +190,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private double parseLatitude(String latitude,String hemisphere) {
+    private double parseLatitude(String latitude, String hemisphere) {
         double value = Double.parseDouble(latitude.substring(0, 2)) +
                 Double.parseDouble(latitude.substring(2)) / 60.0;
 
