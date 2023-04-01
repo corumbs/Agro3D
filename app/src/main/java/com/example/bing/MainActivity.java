@@ -3,6 +3,10 @@ package com.example.bing;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 
@@ -59,6 +63,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+        registerReceiver(bluetoothReceiver, filter);
 
         // Set the user agent
         Configuration.getInstance().load(this, PreferenceManager.getDefaultSharedPreferences(this));
@@ -144,6 +151,35 @@ public class MainActivity extends AppCompatActivity {
             listenThread.start();
         }
     }
+    private final BroadcastReceiver bluetoothReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            final String action = intent.getAction();
+            if (action.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+                final int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+                switch (state) {
+                    case BluetoothAdapter.STATE_OFF:
+                        // Bluetooth turned off, close the socket and stop listening for data
+                        closeSocket();
+                        break;
+                    case BluetoothAdapter.STATE_TURNING_OFF:
+                        // Bluetooth turning off, close the socket and stop listening for data
+                        closeSocket();
+                        break;
+                    case BluetoothAdapter.STATE_ON:
+                        // Bluetooth turned on, try to reconnect to the device
+                        if (!bluetoothConnected) {
+                            connectToDevice();
+                        }
+                        break;
+                    case BluetoothAdapter.STATE_TURNING_ON:
+                        // Bluetooth turning on, do nothing
+                        break;
+                }
+            }
+        }
+    };
+
 
     private void listenForData() {
 
@@ -163,16 +199,25 @@ public class MainActivity extends AppCompatActivity {
                     if (sentenceType.equals("GGA")) {
                         System.out.println("nmea: " + data);
                         // Extract latitude and longitude values from the sentence
-                        double latitude = Double.parseDouble(sentenceParts[2].substring(0, 2));
-                        latitude += Double.parseDouble(sentenceParts[2].substring(2)) / 60;
-                        if (sentenceParts[3].equals("S")) {
-                            latitude = -latitude;
-                        }
+                        double latitude = 0;
+                        double longitude = 0;
+                        if (sentenceParts.length >= 6 && sentenceParts[2].length() >= 4 && sentenceParts[4].length() >= 5) {
+                            latitude = Double.parseDouble(sentenceParts[2].substring(0, 2));
+                            latitude += Double.parseDouble(sentenceParts[2].substring(2)) / 60;
+                            if (sentenceParts[3].equals("S")) {
+                                latitude = -latitude;
+                            }
 
-                        double longitude = Double.parseDouble(sentenceParts[4].substring(0, 3));
-                        longitude += Double.parseDouble(sentenceParts[4].substring(3)) / 60;
-                        if (sentenceParts[5].equals("W")) {
-                            longitude = -longitude;
+                            longitude = Double.parseDouble(sentenceParts[4].substring(0, 3));
+                            longitude += Double.parseDouble(sentenceParts[4].substring(3)) / 60;
+                            if (sentenceParts[5].equals("W")) {
+                                longitude = -longitude;
+                            }
+                            // Use latitude and longitude values here
+                            System.out.println("Latitude: " + latitude);
+                            System.out.println("Longitude: " + longitude);
+                        } else {
+                            System.out.println("Invalid sentence format: " + data);
                         }
 
 
@@ -216,6 +261,28 @@ public class MainActivity extends AppCompatActivity {
                     startListening();
                 }
             } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    private void closeSocket() {
+        bluetoothConnected = false;
+        try {
+            socket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unregisterReceiver(bluetoothReceiver);
+
+        if (bluetoothConnected) {
+            try {
+                socket.close();
+            } catch (IOException e) {
                 e.printStackTrace();
             }
         }
