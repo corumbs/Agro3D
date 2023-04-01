@@ -24,6 +24,24 @@
         android:padding="16dp"
         android:text="NMEA Data"
         android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
+    <TextView
+        android:id="@+id/latitude"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/device_name"
+        android:layout_marginTop="80dp"
+        android:padding="16dp"
+        android:text="latitude"
+        android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
+    <TextView
+        android:id="@+id/longitude"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/device_name"
+        android:layout_marginTop="105dp"
+        android:padding="16dp"
+        android:text="longitude"
+        android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
 
     <Button
         android:id="@+id/restart_button"
