@@ -55,8 +55,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final int REQUEST_ENABLE_BT = 1;
     private boolean bluetoothConnected = false;
     private float polylineWidthInMeters = 5.0f; // Initial polyline width in meters
-    private boolean isTracing = false;
-    private static final double MIN_DISTANCE_THRESHOLD = 5.0; // Minimum distance in meters
+    private boolean isTracing = false; // Keep track of whether or not to trace markers
+    private Button traceButton; // Button to start and stop tracing
 
 
     @Override
@@ -72,10 +72,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         deviceNameTextView = findViewById(R.id.device_name);
         nmeaDataTextView = findViewById(R.id.nmea_data);
 
-        Button traceButton = findViewById(R.id.trace_button);
+        // Get reference to trace button and set click listener
+        traceButton = findViewById(R.id.trace_button);
         traceButton.setOnClickListener(view -> {
-            isTracing = !isTracing;
-            traceButton.setText(isTracing ? "Stop Trace" : "Start Trace");
+            isTracing = !isTracing; // Toggle tracing state
+            traceButton.setText(isTracing ? "Stop Tracing" : "Start Tracing"); // Update button text
         });
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED ||
@@ -284,12 +285,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                             } else {
                                 mMarker.setPosition(newPoint);
                             }
-                            // Update the polyline
-                            polylineOptions.add(newPoint);
-                            if (polyline != null) {
-                                polyline.remove();
+                            if (isTracing) {
+                                // Update the polyline
+                                polylineOptions.add(newPoint);
+                                if (polyline != null) {
+                                    polyline.remove();
+                                }
+                                polyline = mMap.addPolyline(polylineOptions);
                             }
-                            polyline = mMap.addPolyline(polylineOptions);
 
 
 
