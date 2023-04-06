@@ -25,6 +25,12 @@
         android:layout_height="wrap_content"
         android:text="Start Trace"
         android:layout_gravity="center_horizontal"/>
+    <Button
+        android:id="@+id/place_markers_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:text="Place Marker A/B" />
 
 
     <TextView

@@ -57,6 +57,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private float polylineWidthInMeters = 5.0f; // Initial polyline width in meters
     private boolean isTracing = false; // Keep track of whether or not to trace markers
     private Button traceButton; // Button to start and stop tracing
+    private Marker markerA, markerB;
+    private int markerAClicks = 0, markerBClicks = 0;
+    private Button placeMarkersButton;
+    private LatLng lastKnownDirection;
+    private int numOfParallelLines = 5; // Adjust this value based on your requirements
 
 
     @Override
@@ -78,7 +83,22 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             isTracing = !isTracing; // Toggle tracing state
             traceButton.setText(isTracing ? "Stop Tracing" : "Start Tracing"); // Update button text
         });
+        placeMarkersButton = findViewById(R.id.place_markers_button);
+        placeMarkersButton.setOnClickListener(view -> {
+            if (markerAClicks == 0) {
+                markerA = mMap.addMarker(new MarkerOptions()
+                        .position(mMarker.getPosition())
+                        .title("Marker A"));
+                markerAClicks++;
+            } else if (markerBClicks == 0) {
+                markerB = mMap.addMarker(new MarkerOptions()
+                        .position(mMarker.getPosition())
+                        .title("Marker B"));
+                markerBClicks++;
 
+                drawParallelLines(markerA.getPosition(), markerB.getPosition(), polylineWidthInMeters);
+            }
+        });
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED ||
                 ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN}, REQUEST_ENABLE_BT);
@@ -122,6 +142,48 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         float maxZoom = mMap.getMaxZoomLevel();
         mMap.setMinZoomPreference(minZoom);
         mMap.setMaxZoomPreference(maxZoom);
+    }
+
+    private void drawParallelLines(LatLng pointA, LatLng pointB, float polylineWidth) {
+        double distance = calculateDistance(pointA, pointB);
+        int numOfLines = (int) Math.ceil(distance / polylineWidth);
+
+        double dx = (pointB.longitude - pointA.longitude) / numOfLines;
+        double dy = (pointB.latitude - pointA.latitude) / numOfLines;
+
+        double extendDistance = 1000; // The distance (in meters) to extend the lines
+        double angle = Math.atan2(dy, dx);
+        double extendDx = extendDistance * Math.cos(angle) / 111320; // Convert meters to degrees longitude
+        double extendDy = extendDistance * Math.sin(angle) / 111320; // Convert meters to degrees latitude
+
+        // Calculate the perpendicular angle and distance
+        double perpendicularAngle = angle + Math.PI / 2;
+        double dPerpendicularX = polylineWidth * Math.cos(perpendicularAngle) / 111320;
+        double dPerpendicularY = polylineWidth * Math.sin(perpendicularAngle) / 111320;
+
+        int numOfParallelLines = 3; // Number of parallel lines to create on each side of the main line
+
+        for (int i = 0; i < numOfLines; i++) {
+            for (int j = -numOfParallelLines; j <= numOfParallelLines; j++) {
+                LatLng start = new LatLng(pointA.latitude + i * dy - extendDy + j * dPerpendicularY,
+                        pointA.longitude + i * dx - extendDx + j * dPerpendicularX);
+                LatLng end = new LatLng(pointA.latitude + (i + 1) * dy + extendDy + j * dPerpendicularY,
+                        pointA.longitude + (i + 1) * dx + extendDx + j * dPerpendicularX);
+
+                Polyline line = mMap.addPolyline(new PolylineOptions()
+                        .add(start, end)
+                        .width(3) // Width of the line (make it thin)
+                        .color(Color.BLACK)); // Set the color to black
+            }
+        }
+
+        // Remove markers A and B after drawing the lines
+        if (markerA != null) {
+            markerA.remove();
+        }
+        if (markerB != null) {
+            markerB.remove();
+        }
     }
 
 
@@ -216,10 +278,25 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         return R * c;
     }
 
+    private void extendParallelLines(LatLng currentPoint, LatLng direction, float polylineWidth) {
+        if (lastKnownDirection == null) {
+            return;
+        }
 
+        LatLng newPointA = new LatLng(markerA.getPosition().latitude + direction.latitude,
+                markerA.getPosition().longitude + direction.longitude);
+        LatLng newPointB = new LatLng(markerB.getPosition().latitude + direction.latitude,
+                markerB.getPosition().longitude + direction.longitude);
+
+        // Extend lines using newPointA and newPointB
+        drawParallelLines(newPointA, newPointB, polylineWidth);
+
+        // Update markerA and markerB positions
+        markerA.setPosition(newPointA);
+        markerB.setPosition(newPointB);
+    }
 
     private void listenForData() {
-
         try {
             inputStream = socket.getInputStream();
             BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
@@ -229,13 +306,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 if (data != null) {
                     runOnUiThread(() -> nmeaDataTextView.setText(data));
 
-
                     String[] sentenceParts = data.split(",");
                     String sentenceType = sentenceParts[0].substring(3);
-                    // Check if the NMEA sentence is of the correct type
+
                     if (sentenceType.equals("GGA")) {
-                        //System.out.println("nmea: " + data);
-                        // Extract latitude and longitude values from the sentence
                         double latitude = 0;
                         double longitude = 0;
                         if (sentenceParts.length >= 6 && sentenceParts[2].length() >= 4 && sentenceParts[4].length() >= 5) {
@@ -250,43 +324,35 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                             if (sentenceParts[5].equals("W")) {
                                 longitude = -longitude;
                             }
-                            // Use latitude and longitude values here
-                            //System.out.println("Latitude: " + latitude);
-                            //System.out.println("Longitude: " + longitude);
                         } else {
                             System.out.println("Invalid sentence format: " + data);
                         }
 
-
-                        // Use a latitude e longitude extraídas aqui
-                        //System.out.println("Latitude: " + latitude + " " + sentenceParts[3]);
-                        //System.out.println("Longitude: " + longitude + " " + sentenceParts[5]);
-
-                        // Display latitude and longitude on the screen
                         double finalLatitude = latitude;
                         double finalLongitude = longitude;
 
-                        double finalLatitude1 = latitude;
-                        double finalLongitude1 = longitude;
                         runOnUiThread(() -> {
-
                             nmeaDataTextView.setText(data);
 
-
-                            // Update marker position on the map
-                            LatLng newPoint = new LatLng(finalLatitude1, finalLongitude1);
+                            LatLng newPoint = new LatLng(finalLatitude, finalLongitude);
                             if (mMarker == null) {
                                 mMarker = mMap.addMarker(new MarkerOptions()
                                         .position(newPoint)
                                         .title("this is you"));
                                 Float minZoom = null;
-                                updateCameraPosition(minZoom); // Set initial camera position at the marker with the minimum zoom level
-
+                                updateCameraPosition(minZoom);
                             } else {
                                 mMarker.setPosition(newPoint);
                             }
+
+                            // Store the last known direction
+                            LatLng lastPoint = new LatLng(finalLatitude, finalLongitude);
+                            if (mMarker != null) {
+                                lastKnownDirection = new LatLng(mMarker.getPosition().latitude - lastPoint.latitude,
+                                        mMarker.getPosition().longitude - lastPoint.longitude);
+                            }
+
                             if (isTracing) {
-                                // Update the polyline
                                 polylineOptions.add(newPoint);
                                 if (polyline != null) {
                                     polyline.remove();
@@ -294,8 +360,15 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                                 polyline = mMap.addPolyline(polylineOptions);
                             }
 
+                            if (markerA != null && markerB != null) {
+                                double distanceToLineA = calculateDistance(newPoint, markerA.getPosition());
+                                double distanceToLineB = calculateDistance(newPoint, markerB.getPosition());
+                                double maxDistance = polylineWidthInMeters * (2 * numOfParallelLines + 1);
 
-
+                                if (distanceToLineA > maxDistance || distanceToLineB > maxDistance) {
+                                    extendParallelLines(newPoint, lastKnownDirection, polylineWidthInMeters);
+                                }
+                            }
                         });
                     }
                 } else {
@@ -308,10 +381,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         bluetoothConnected = false;
 
-        // Reconnect and restart data flow
         while (!bluetoothConnected) {
             try {
-                Thread.sleep(1000); // Wait for 1 second before attempting reconnection
+                Thread.sleep(1000);
                 if (connectToDevice()) {
                     startListening();
                 }
@@ -320,4 +392,5 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         }
     }
+
 }
