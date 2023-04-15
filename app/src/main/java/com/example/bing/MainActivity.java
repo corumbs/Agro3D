@@ -1,396 +1,299 @@
 package com.example.bing;
 
+import androidx.appcompat.app.AppCompatActivity;
+
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothSocket;
-import android.content.pm.PackageManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Bundle;
-
-
-import android.view.inputmethod.EditorInfo;
+import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.TextView;
-
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.UUID;
-import android.Manifest;
-//libraries
-import com.google.android.gms.maps.CameraUpdate;
-import com.google.android.gms.maps.CameraUpdateFactory;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.OnMapReadyCallback;
-import com.google.android.gms.maps.model.CameraPosition;
-import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.maps.model.Polyline;
-import com.google.android.gms.maps.model.PolylineOptions;
-import android.graphics.Color;
 import android.widget.Toast;
+import com.google.android.gms.maps.GoogleMapOptions;
+import android.content.SharedPreferences;
 
-public class MainActivity extends AppCompatActivity implements OnMapReadyCallback {
-    private Thread listenThread;
-    private static final String DEVICE_ADDRESS = "10:52:1C:69:3E:6E"; // MAC address of the Bluetooth device
-    private static final UUID PORT_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); // Serial Port Service ID
-    private Marker mMarker;
-    private PolylineOptions polylineOptions;
-    private Polyline polyline;
-    private BluetoothDevice device;
-    private BluetoothSocket socket;
-    private InputStream inputStream;
-    private GoogleMap mMap;
-    private Button centerButton;
-    private TextView deviceNameTextView;
-    private TextView nmeaDataTextView;
-    private static final int REQUEST_ENABLE_BT = 1;
-    private boolean bluetoothConnected = false;
-    private float polylineWidthInMeters = 5.0f; // Initial polyline width in meters
-    private boolean isTracing = false; // Keep track of whether or not to trace markers
-    private Button traceButton; // Button to start and stop tracing
-    private Marker markerA, markerB;
-    private int markerAClicks = 0, markerBClicks = 0;
-    private Button placeMarkersButton;
-    private LatLng lastKnownDirection;
-    private int numOfParallelLines = 5; // Adjust this value based on your requirements
+public class MainActivity extends AppCompatActivity implements NMEADataParser.NMEADataListener {
+    private TextView latitudeTextView;
+    private TextView longitudeTextView;
+    private TextView nmeaTextView;
+    private MapHandler mapHandler;
+    private NMEADataParser nmeaDataParser;
+    private boolean isTrailActive = false;
+    private static final String PREFS_NAME = "com.example.bing_preferences";
+    private static final String PREFS_POLYLINE_WIDTH = "polyline_width";
+    private BluetoothHandler bluetoothHandler;
+    private TrailDatabaseHelper trailDatabaseHelper;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        GoogleMapOptions mapOptions = new GoogleMapOptions().maxZoomPreference(100); // Replace 25 with your desired maximum zoom level
+        mapHandler = new MapHandler(this, R.id.map, mapOptions);
 
-        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.map);
-        mapFragment.getMapAsync(this);
-        centerButton = findViewById(R.id.center_button);
-        centerButton.setOnClickListener(view -> centerMapOnMarker());
-        deviceNameTextView = findViewById(R.id.device_name);
-        nmeaDataTextView = findViewById(R.id.nmea_data);
+        // inicializa o map handler
+        latitudeTextView = findViewById(R.id.latitudeTextView);
+        longitudeTextView = findViewById(R.id.longitudeTextView);
 
-        // Get reference to trace button and set click listener
-        traceButton = findViewById(R.id.trace_button);
-        traceButton.setOnClickListener(view -> {
-            isTracing = !isTracing; // Toggle tracing state
-            traceButton.setText(isTracing ? "Stop Tracing" : "Start Tracing"); // Update button text
-        });
-        placeMarkersButton = findViewById(R.id.place_markers_button);
-        placeMarkersButton.setOnClickListener(view -> {
-            if (markerAClicks == 0) {
-                markerA = mMap.addMarker(new MarkerOptions()
-                        .position(mMarker.getPosition())
-                        .title("Marker A"));
-                markerAClicks++;
-            } else if (markerBClicks == 0) {
-                markerB = mMap.addMarker(new MarkerOptions()
-                        .position(mMarker.getPosition())
-                        .title("Marker B"));
-                markerBClicks++;
+        // cria uma instancia do NMEADataParser e poe esta atividade como seu NMEADataListener
+        nmeaDataParser = new NMEADataParser();
+        nmeaDataParser.setNMEADataListener(this);
 
-                drawParallelLines(markerA.getPosition(), markerB.getPosition(), polylineWidthInMeters);
-            }
-        });
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) != PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN}, REQUEST_ENABLE_BT);
-        } else {
-            if (initBluetooth()) {
-                if (connectToDevice()) {
-                    startListening();
+        // registra BroadcastReceiver para as mudancas de estado do Bluetooth
+        IntentFilter filter = new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED);
+        registerReceiver(bluetoothStateReceiver, filter);
+
+        //declara o botao de de comecar o tracejado
+        Button startStopTrailButton = findViewById(R.id.startStopTrailButton);
+
+        //salva o tamanho do tracejado
+        float savedPolylineWidth = loadPolylineWidth();
+        mapHandler.setPolylineWidthInMeters(savedPolylineWidth);
+
+        EditText polylineWidthEditText = findViewById(R.id.polylineWidthEditText);
+        Button setPolylineWidthButton = findViewById(R.id.setPolylineWidthButton);
+
+        setPolylineWidthButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                String inputText = polylineWidthEditText.getText().toString();
+                if (!inputText.isEmpty()) {
+                    float newPolylineWidth = Float.parseFloat(inputText);
+                    mapHandler.setPolylineWidthInMeters(newPolylineWidth);
+                    savePolylineWidth(newPolylineWidth);
+
+                } else {
+                    Toast.makeText(MainActivity.this, "Please enter a valid width", Toast.LENGTH_SHORT).show();
                 }
             }
-        }
-        EditText polylineWidthInput = findViewById(R.id.polyline_width_input);
-        polylineWidthInput.setOnEditorActionListener((textView, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                try {
-                    float meters = Float.parseFloat(textView.getText().toString());
-                    updatePolylineWidth(meters);
-                } catch (NumberFormatException e) {
-                    Toast.makeText(MainActivity.this, "Invalid input. Please enter a valid number.", Toast.LENGTH_SHORT).show();
+        });
+        Button toggleMapViewButton = findViewById(R.id.toggleMapViewButton);
+        toggleMapViewButton.setOnClickListener(new View.OnClickListener() {
+            private boolean isSatelliteView = false;
+
+            @Override
+            public void onClick(View view) {
+                if (isSatelliteView) {
+                    mapHandler.setMapTypeNormal();
+                    toggleMapViewButton.setText("Satellite View");
+                } else {
+                    mapHandler.setMapTypeSatellite();
+                    toggleMapViewButton.setText("Normal View");
                 }
-                return true;
+                isSatelliteView = !isSatelliteView;
             }
-            return false;
         });
 
-    }
 
-    @Override
-    public void onMapReady(GoogleMap googleMap) {
-        mMap = googleMap;
-        polylineOptions = new PolylineOptions()
-                .color(Color.argb(80, 255, 255, 0)); // Set color to semi-transparent yellow
+        Button placePointsButton = findViewById(R.id.placePointsButton);
 
-        // Set an initial polyline width
-        updatePolylineWidth(polylineWidthInMeters);
+        placePointsButton.setOnClickListener(new View.OnClickListener() {
+            boolean pointAAdded = false;
 
-        // Update polyline width when the camera position changes
-        mMap.setOnCameraIdleListener(() -> updatePolylineWidth(polylineWidthInMeters));
-
-        // Set minimum and maximum zoom levels
-        float minZoom = 17.0f; // Adjust this value to set the minimum zoom level
-        float maxZoom = mMap.getMaxZoomLevel();
-        mMap.setMinZoomPreference(minZoom);
-        mMap.setMaxZoomPreference(maxZoom);
-    }
-
-    private void drawParallelLines(LatLng pointA, LatLng pointB, float polylineWidth) {
-        double distance = calculateDistance(pointA, pointB);
-        int numOfLines = (int) Math.ceil(distance / polylineWidth);
-
-        double dx = (pointB.longitude - pointA.longitude) / numOfLines;
-        double dy = (pointB.latitude - pointA.latitude) / numOfLines;
-
-        double extendDistance = 1000; // The distance (in meters) to extend the lines
-        double angle = Math.atan2(dy, dx);
-        double extendDx = extendDistance * Math.cos(angle) / 111320; // Convert meters to degrees longitude
-        double extendDy = extendDistance * Math.sin(angle) / 111320; // Convert meters to degrees latitude
-
-        // Calculate the perpendicular angle and distance
-        double perpendicularAngle = angle + Math.PI / 2;
-        double dPerpendicularX = polylineWidth * Math.cos(perpendicularAngle) / 111320;
-        double dPerpendicularY = polylineWidth * Math.sin(perpendicularAngle) / 111320;
-
-        int numOfParallelLines = 3; // Number of parallel lines to create on each side of the main line
-
-        for (int i = 0; i < numOfLines; i++) {
-            for (int j = -numOfParallelLines; j <= numOfParallelLines; j++) {
-                LatLng start = new LatLng(pointA.latitude + i * dy - extendDy + j * dPerpendicularY,
-                        pointA.longitude + i * dx - extendDx + j * dPerpendicularX);
-                LatLng end = new LatLng(pointA.latitude + (i + 1) * dy + extendDy + j * dPerpendicularY,
-                        pointA.longitude + (i + 1) * dx + extendDx + j * dPerpendicularX);
-
-                Polyline line = mMap.addPolyline(new PolylineOptions()
-                        .add(start, end)
-                        .width(3) // Width of the line (make it thin)
-                        .color(Color.BLACK)); // Set the color to black
+            @Override
+            public void onClick(View view) {
+                if (!pointAAdded) {
+                    mapHandler.placePointA();
+                    placePointsButton.setText("Place Point B");
+                } else {
+                    float userDefinedWidth = Float.parseFloat(polylineWidthEditText.getText().toString());
+                    mapHandler.placePointB(userDefinedWidth);
+                    placePointsButton.setText("Place Point A");
+                }
+                pointAAdded = !pointAAdded;
             }
-        }
+        });
 
-        // Remove markers A and B after drawing the lines
-        if (markerA != null) {
-            markerA.remove();
-        }
-        if (markerB != null) {
-            markerB.remove();
-        }
+        startStopTrailButton.setOnClickListener(new View.OnClickListener() {
+            private boolean isTracing = false;
+
+            @Override
+            public void onClick(View view) {
+                if (isTracing) {
+                    mapHandler.stopTrail();
+                    startStopTrailButton.setText("Start Trail");
+                } else {
+                    mapHandler.startTrail();
+                    startStopTrailButton.setText("Stop Trail");
+                }
+                isTracing = !isTracing;
+            }
+        });
+
+
+        Button clearTrailButton = findViewById(R.id.clearTrailButton);
+        clearTrailButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                mapHandler.clearTrail();
+                trailDatabaseHelper.clearAllTrails(); // Add this line to clear the saved trail data
+            }
+        });
+
+
+
+
+        // Set up the Bluetooth connection
+        setupBluetooth();
+        Button centerButton = findViewById(R.id.centerButton);
+        centerButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                mapHandler.centerCameraOnMarker();
+            }
+        });
+
+
+
+
+        // Add the zoom in button and its click listener
+        Button zoomInButton = findViewById(R.id.zoomInButton);
+        zoomInButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                setMapScale(2); // Replace 2 with the desired scale factor for zooming in
+            }
+        });
+
+        // Add the zoom out button and its click listener
+        Button zoomOutButton = findViewById(R.id.zoomOutButton);
+        zoomOutButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                setMapScale(1); // Set the scale factor to 1 for zooming out (original scale)
+            }
+        });
+        trailDatabaseHelper = new TrailDatabaseHelper(this);
+
+    }
+    private void savePolylineWidth(float polylineWidth) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putFloat(PREFS_POLYLINE_WIDTH, polylineWidth);
+        editor.apply();
     }
 
+    private float loadPolylineWidth() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        return prefs.getFloat(PREFS_POLYLINE_WIDTH, 10); // Default value is 10
+    }
+
+    private void setMapScale(float scale) {
+        FrameLayout mapContainer = findViewById(R.id.map_container);
+        mapContainer.setScaleX(scale);
+        mapContainer.setScaleY(scale);
+    }
+
+    // Configura a conexão Bluetooth criando uma instância de BluetoothHandler, definindo seu BluetoothDataListener
+// e conectando ao dispositivo
+    private void setupBluetooth() {
+        bluetoothHandler = new BluetoothHandler("10:52:1C:69:3E:6E");
+        bluetoothHandler.setBluetoothDataListener(new BluetoothHandler.BluetoothDataListener() {
+
+            @Override
+            public void onDataReceived(String data) {
+                if (data == null) {
+                    return;
+                }
+
+                // Atualiza o nmeaTextView com os dados recebidos
 
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                // Analisa os dados recebidos e atualiza a UI com a latitude e longitude se elas forem válidas
+                String[] lines = data.split("\n");
+                for (String line : lines) {
+                    NMEADataParser.ParsedGGAData parsedData = NMEADataParser.parseGGAData(line);
 
-        if (requestCode == REQUEST_ENABLE_BT) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && grantResults[1] == PackageManager.PERMISSION_GRANTED) {
-                if (initBluetooth()) {
-                    if (connectToDevice()) {
-                        startListening();
+                    if (parsedData != null) {
+                        double latitude = parsedData.latitude;
+                        double longitude = parsedData.longitude;
+
+                        if (isValidCoordinates(latitude, longitude)) {
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    latitudeTextView.setText(String.format("Latitude: %.5f", latitude));
+                                    longitudeTextView.setText(String.format("Longitude: %.5f", longitude));
+                                }
+                            });
+
+                            // Atualiza o marcador no mapa
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    mapHandler.updateMarker(latitude, longitude);
+                                }
+                            });
+                        }
                     }
                 }
-            } else {
-                // Permission denied
             }
-        }
+        });
+
+        bluetoothHandler.connect();
     }
-    private void centerMapOnMarker() {
-        if (mMap != null && mMarker != null) {
-            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(mMarker.getPosition(), 18.0f));
-        }
+
+    // Chamado quando o NMEADataParser termina de analisar uma sentença, atualiza o latitudeTextView e o longitudeTextView
+    @Override
+    public void onNMEADataParsed(double latitude, double longitude) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                latitudeTextView.setText(String.format("Latitude: %.5f", latitude));
+                longitudeTextView.setText(String.format("Longitude: %.5f", longitude));
+            }
+        });
     }
-    private boolean initBluetooth() {
-        BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (bluetoothAdapter == null) {
+
+    private boolean isValidCoordinates(double latitude, double longitude) {
+// Verifica se a latitude está entre -34 e 6
+        if (latitude < -34 || latitude > 6) {
             return false;
         }
 
-        if (!bluetoothAdapter.isEnabled()) {
+// Verifica se a longitude está entre -74 e -35
+        if (longitude < -74 || longitude > -35) {
             return false;
         }
-
-        device = bluetoothAdapter.getRemoteDevice(DEVICE_ADDRESS);
-        deviceNameTextView.setText(device.getName());
 
         return true;
     }
+    private final BroadcastReceiver bluetoothStateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            // Verifica se a ação está relacionada a mudanças de estado do Bluetooth
 
-    private boolean connectToDevice() {
-        try {
-            socket = device.createRfcommSocketToServiceRecord(PORT_UUID);
-            socket.connect();
-            bluetoothConnected = true;
-            return true;
-        } catch (IOException e) {
-            e.printStackTrace();
-            bluetoothConnected = false;
-            return false;
-        }
-    }
 
-    private void startListening() {
-        if (bluetoothConnected) {
-            listenThread = new Thread(this::listenForData);
-            listenThread.start();
-        }
-    }
-    private void updatePolylineWidth(float meters) {
-        polylineWidthInMeters = meters;
-        if (mMap != null) {
-            float zoomLevel = mMap.getCameraPosition().zoom;
-            float metersPerPixel = (float) (156543.03392 * Math.cos(mMap.getCameraPosition().target.latitude * Math.PI / 180) / Math.pow(2, zoomLevel));
-            float widthInPixels = meters / metersPerPixel;
-            if (polyline != null) {
-                polyline.setWidth(widthInPixels);
-            }
-            if (polylineOptions != null) {
-                polylineOptions.width(widthInPixels);
-            }
-        }
-    }
-    private void updateCameraPosition(Float zoomLevel) {
-        if (mMap != null && mMarker != null) {
-            if (zoomLevel != null) {
-                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(mMarker.getPosition(), zoomLevel));
-            } else {
-                mMap.moveCamera(CameraUpdateFactory.newLatLng(mMarker.getPosition()));
-            }
-        }
-    }
-    private double calculateDistance(LatLng point1, LatLng point2) {
-        double R = 6371000; // Earth radius in meters
-        double dLat = Math.toRadians(point2.latitude - point1.latitude);
-        double dLng = Math.toRadians(point2.longitude - point1.longitude);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(Math.toRadians(point1.latitude)) * Math.cos(Math.toRadians(point2.latitude)) *
-                        Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }
+            if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(action)) {
+                int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
 
-    private void extendParallelLines(LatLng currentPoint, LatLng direction, float polylineWidth) {
-        if (lastKnownDirection == null) {
-            return;
-        }
+                if (state == BluetoothAdapter.STATE_ON) {
+                    // O Bluetooth agora está ligado, tente reconectar
 
-        LatLng newPointA = new LatLng(markerA.getPosition().latitude + direction.latitude,
-                markerA.getPosition().longitude + direction.longitude);
-        LatLng newPointB = new LatLng(markerB.getPosition().latitude + direction.latitude,
-                markerB.getPosition().longitude + direction.longitude);
-
-        // Extend lines using newPointA and newPointB
-        drawParallelLines(newPointA, newPointB, polylineWidth);
-
-        // Update markerA and markerB positions
-        markerA.setPosition(newPointA);
-        markerB.setPosition(newPointB);
-    }
-
-    private void listenForData() {
-        try {
-            inputStream = socket.getInputStream();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-
-            while (bluetoothConnected) {
-                String data = reader.readLine();
-                if (data != null) {
-                    runOnUiThread(() -> nmeaDataTextView.setText(data));
-
-                    String[] sentenceParts = data.split(",");
-                    String sentenceType = sentenceParts[0].substring(3);
-
-                    if (sentenceType.equals("GGA")) {
-                        double latitude = 0;
-                        double longitude = 0;
-                        if (sentenceParts.length >= 6 && sentenceParts[2].length() >= 4 && sentenceParts[4].length() >= 5) {
-                            latitude = Double.parseDouble(sentenceParts[2].substring(0, 2));
-                            latitude += Double.parseDouble(sentenceParts[2].substring(2)) / 60;
-                            if (sentenceParts[3].equals("S")) {
-                                latitude = -latitude;
-                            }
-
-                            longitude = Double.parseDouble(sentenceParts[4].substring(0, 3));
-                            longitude += Double.parseDouble(sentenceParts[4].substring(3)) / 60;
-                            if (sentenceParts[5].equals("W")) {
-                                longitude = -longitude;
-                            }
-                        } else {
-                            System.out.println("Invalid sentence format: " + data);
-                        }
-
-                        double finalLatitude = latitude;
-                        double finalLongitude = longitude;
-
-                        runOnUiThread(() -> {
-                            nmeaDataTextView.setText(data);
-
-                            LatLng newPoint = new LatLng(finalLatitude, finalLongitude);
-                            if (mMarker == null) {
-                                mMarker = mMap.addMarker(new MarkerOptions()
-                                        .position(newPoint)
-                                        .title("this is you"));
-                                Float minZoom = null;
-                                updateCameraPosition(minZoom);
-                            } else {
-                                mMarker.setPosition(newPoint);
-                            }
-
-                            // Store the last known direction
-                            LatLng lastPoint = new LatLng(finalLatitude, finalLongitude);
-                            if (mMarker != null) {
-                                lastKnownDirection = new LatLng(mMarker.getPosition().latitude - lastPoint.latitude,
-                                        mMarker.getPosition().longitude - lastPoint.longitude);
-                            }
-
-                            if (isTracing) {
-                                polylineOptions.add(newPoint);
-                                if (polyline != null) {
-                                    polyline.remove();
-                                }
-                                polyline = mMap.addPolyline(polylineOptions);
-                            }
-
-                            if (markerA != null && markerB != null) {
-                                double distanceToLineA = calculateDistance(newPoint, markerA.getPosition());
-                                double distanceToLineB = calculateDistance(newPoint, markerB.getPosition());
-                                double maxDistance = polylineWidthInMeters * (2 * numOfParallelLines + 1);
-
-                                if (distanceToLineA > maxDistance || distanceToLineB > maxDistance) {
-                                    extendParallelLines(newPoint, lastKnownDirection, polylineWidthInMeters);
-                                }
-                            }
-                        });
-                    }
-                } else {
-                    break;
+                    setupBluetooth();
                 }
             }
-        } catch (IOException e) {
-            e.printStackTrace();
         }
+    };
 
-        bluetoothConnected = false;
 
-        while (!bluetoothConnected) {
-            try {
-                Thread.sleep(1000);
-                if (connectToDevice()) {
-                    startListening();
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unregisterReceiver(bluetoothStateReceiver);
+        // Desconecta do dispositivo Bluetooth
+
+
+        if (bluetoothHandler != null) {
+            bluetoothHandler.disconnect();
         }
     }
-
 }

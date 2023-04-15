@@ -1,68 +1,127 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
+
     <Button
-        android:id="@+id/center_button"
+        android:id="@+id/centerButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Center"
-        android:layout_alignParentBottom="true"
-        android:layout_centerHorizontal="true" />
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
     <EditText
-        android:id="@+id/polyline_width_input"
-        android:layout_width="match_parent"
+        android:id="@+id/polylineWidthEditText"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:hint="Enter polyline width (meters)"
-        android:inputType="numberDecimal"
         android:imeOptions="actionDone"
-        android:layout_marginTop="30dp"
-        android:maxLines="1"/>
-    <Button
-        android:id="@+id/trace_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Start Trace"
-        android:layout_gravity="center_horizontal"/>
-    <Button
-        android:id="@+id/place_markers_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentEnd="true"
-        android:text="Place Marker A/B" />
+        android:inputType="numberDecimal"
+        android:maxLines="1"
+        app:layout_constraintEnd_toStartOf="@id/setPolylineWidthButton"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
+    <Button
+        android:id="@+id/setPolylineWidthButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Set Width"
+        app:layout_constraintBaseline_toBaselineOf="@id/polylineWidthEditText"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/polylineWidthEditText" />
+
+    <Button
+        android:id="@+id/startStopTrailButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Start Trail"
+        app:layout_constraintEnd_toStartOf="@id/clearTrailButton"
+        app:layout_constraintHorizontal_chainStyle="packed"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/polylineWidthEditText" />
+    <Button
+        android:id="@+id/toggleMapViewButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Toggle Map View" />
+
+    <Button
+        android:id="@+id/clearTrailButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Clear Trail"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/startStopTrailButton"
+        app:layout_constraintTop_toTopOf="@id/startStopTrailButton" />
+
+    <Button
+        android:id="@+id/placePointsButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Place Point A"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/startStopTrailButton" />
 
     <TextView
-        android:id="@+id/device_name"
-        android:layout_width="wrap_content"
+        android:id="@+id/latitudeTextView"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="16dp"
-        android:text="Device Name"
-        android:textAppearance="@style/TextAppearance.AppCompat.Large" />
-
-    <TextView
-        android:id="@+id/nmea_data"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/device_name"
-        android:layout_marginTop="32dp"
         android:padding="16dp"
-        android:text="NMEA Data"
-        android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
+        android:text="Latitude"
+        android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/placePointsButton" />
 
+    <TextView
+        android:id="@+id/longitudeTextView"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:text="Longitude"
+        android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/latitudeTextView" />
 
-    <fragment
-        android:layout_width="1000dp"
-        android:layout_height="500dp"
-        android:layout_alignParentBottom="true"
-        android:id="@+id/map"
+    <Button
+        android:id="@+id/zoomInButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Zoom In"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/longitudeTextView" />
 
-        android:name="com.google.android.gms.maps.SupportMapFragment"        />
+    <Button
+        android:id="@+id/zoomOutButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Zoom Out"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/zoomInButton" />
 
+    <FrameLayout
+        android:id="@+id/map_container"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toTopOf="@+id/centerButton"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/zoomOutButton">
 
+        <fragment
+            android:id="@+id/map"
+            android:name="com.google.android.gms.maps.SupportMapFragment"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
 
+</androidx.constraintlayout.widget.ConstraintLayout>
 
-</RelativeLayout>
