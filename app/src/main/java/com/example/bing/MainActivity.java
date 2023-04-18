@@ -7,6 +7,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -194,7 +195,8 @@ public class MainActivity extends AppCompatActivity implements NMEADataParser.NM
     // Configura a conexão Bluetooth criando uma instância de BluetoothHandler, definindo seu BluetoothDataListener
 // e conectando ao dispositivo
     private void setupBluetooth() {
-        bluetoothHandler = new BluetoothHandler("10:52:1C:69:3E:6E");
+// Replace "HC-05" with the desired device name
+        BluetoothHandler bluetoothHandler = new BluetoothHandler("3D AGRO");
         bluetoothHandler.setBluetoothDataListener(new BluetoothHandler.BluetoothDataListener() {
 
             @Override
@@ -238,6 +240,11 @@ public class MainActivity extends AppCompatActivity implements NMEADataParser.NM
         });
 
         bluetoothHandler.connect();
+    }
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Do any custom handling if needed, otherwise leave it empty
     }
 
     // Chamado quando o NMEADataParser termina de analisar uma sentença, atualiza o latitudeTextView e o longitudeTextView

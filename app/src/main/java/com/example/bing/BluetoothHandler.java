@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothSocket;
 import android.util.Log;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Set;
 import java.util.UUID;
 
 public class BluetoothHandler {
@@ -16,18 +17,40 @@ public class BluetoothHandler {
     private BluetoothDevice bluetoothDevice;
     private BluetoothSocket bluetoothSocket;
     private InputStream inputStream;
+    private String deviceName;
+    private static final long RECONNECT_DELAY = 5000; // 5 seconds
 
     private BluetoothDataListener bluetoothDataListener;
 
-    public BluetoothHandler(String deviceAddress) {
-// Obtém o adaptador Bluetooth padrão
+    public BluetoothHandler(String deviceName) {
+        // Obtém o adaptador Bluetooth padrão
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-// Obtém o dispositivo Bluetooth com o endereço fornecido
-        bluetoothDevice = bluetoothAdapter.getRemoteDevice(deviceAddress);
+        this.deviceName = deviceName;
+        bluetoothDevice = findPairedDevice();
     }
+
+
+    private BluetoothDevice findPairedDevice() {
+        Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
+
+        // If there are paired devices, look for the desired device
+        if (pairedDevices.size() > 0) {
+            for (BluetoothDevice device : pairedDevices) {
+                if (device.getName().equals(deviceName)) {
+                    return device;
+                }
+            }
+        }
+        return null;
+    }
+
 
     public void connect() {
 // Cria uma nova thread para conectar ao dispositivo Bluetooth
+        if (bluetoothDevice == null) {
+            Log.e(TAG, "Device not found. Ensure it is paired.");
+            return;
+        }
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -89,6 +112,19 @@ public class BluetoothHandler {
 // Se houver um erro ao fechar a conexão, registra o erro
             Log.e(TAG, "Falha ao fechar a conexão: ", e);
         }
+        new Thread(() -> attemptReconnect()).start();
+
+    }
+    private void attemptReconnect() {
+        try {
+            // Wait for a while before trying to reconnect
+            Thread.sleep(RECONNECT_DELAY);
+        } catch (InterruptedException e) {
+            Log.e(TAG, "Reconnect delay interrupted", e);
+        }
+
+        // Start a new connection
+        connect();
     }
 
     public void setBluetoothDataListener(BluetoothDataListener listener) {

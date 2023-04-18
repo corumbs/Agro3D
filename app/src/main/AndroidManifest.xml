@@ -9,6 +9,7 @@
 
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <application
+        android:configChanges="uiMode"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -17,6 +18,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Bing"
         tools:targetApi="31">
+
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDhAXWKEQymIsxM31mef2t4yPV9dQbj304" />

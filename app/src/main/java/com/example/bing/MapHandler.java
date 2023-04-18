@@ -15,11 +15,13 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.maps.android.PolyUtil;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class MapHandler implements OnMapReadyCallback {
@@ -38,6 +40,8 @@ public class MapHandler implements OnMapReadyCallback {
     private Polyline lineBetweenPoints;
     private List<Polyline> parallelLines = new ArrayList<>();
     private boolean isRecordingTrail = false;
+    private Polyline highlightedLine;
+    private float userDefinedWidth;
 
     public void setRecordingTrail(boolean isRecordingTrail) {
         this.isRecordingTrail = isRecordingTrail;
@@ -52,18 +56,17 @@ public class MapHandler implements OnMapReadyCallback {
     }
 
     public void placePointB(float userDefinedWidth) {
+        this.userDefinedWidth = userDefinedWidth;
+
         if (pointBMarker != null) {
             pointBMarker.remove();
         }
         LatLng markerPosition = marker.getPosition();
         pointBMarker = map.addMarker(new MarkerOptions().position(markerPosition).title("Point B"));
 
-        drawParallelLines(pointAMarker.getPosition(), pointBMarker.getPosition(), userDefinedWidth);
+        LatLngBounds mapBounds = map.getProjection().getVisibleRegion().latLngBounds;
+        drawParallelLines(pointAMarker.getPosition(), pointBMarker.getPosition(), userDefinedWidth, mapBounds);
     }
-
-
-
-
 
 
     public void startTrail() {
@@ -74,7 +77,7 @@ public class MapHandler implements OnMapReadyCallback {
         trail = map.addPolyline(polylineOptions);
         initMap(); // Initialize the map when starting the trail
     }
-    private void drawParallelLines(LatLng pointA, LatLng pointB, float userDefinedWidth) {
+    private void drawParallelLines(LatLng pointA, LatLng pointB, float userDefinedWidth, LatLngBounds visibleBounds) {
         double distance = calculateDistance(pointA, pointB);
         double dx = (pointB.longitude - pointA.longitude);
         double dy = (pointB.latitude - pointA.latitude);
@@ -96,7 +99,8 @@ public class MapHandler implements OnMapReadyCallback {
             line.remove();
         }
         parallelLines.clear();
-
+        LatLng extendedStart = new LatLng(visibleBounds.southwest.latitude - extendDy, visibleBounds.southwest.longitude - extendDx);
+        LatLng extendedEnd = new LatLng(visibleBounds.northeast.latitude + dy + extendDy, visibleBounds.northeast.longitude + dx + extendDx);
         // Draw the central line
         LatLng centralStart = new LatLng(pointA.latitude - extendDy, pointA.longitude - extendDx);
         LatLng centralEnd = new LatLng(pointA.latitude + dy + extendDy, pointA.longitude + dx + extendDx);
@@ -132,6 +136,45 @@ public class MapHandler implements OnMapReadyCallback {
     }
 
 
+    private void highlightClosestLine() {
+        if (marker == null || parallelLines.isEmpty()) {
+            return;
+        }
+
+        Polyline closestLine = null;
+        double minDistance = Double.MAX_VALUE;
+        LatLng currentPosition = marker.getPosition();
+
+        for (Polyline line : parallelLines) {
+            List<LatLng> points = line.getPoints();
+            if (points.size() != 2) {
+                continue;
+            }
+            LatLng startPoint = points.get(0);
+            LatLng endPoint = points.get(1);
+
+            double distance = PolyUtil.distanceToLine(currentPosition, startPoint, endPoint);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestLine = line;
+            }
+        }
+
+        if (closestLine != null) {
+            // Reset the color of the previously highlighted line
+            if (highlightedLine != null) {
+                highlightedLine.setColor(Color.BLACK);
+            }
+
+            // Highlight the closest line
+            closestLine.setColor(Color.RED);
+            highlightedLine = closestLine;
+        }
+    }
+
+
+
+
     public void setMapTypeNormal() {
         if (map != null) {
             map.setMapType(GoogleMap.MAP_TYPE_NORMAL);
@@ -144,23 +187,6 @@ public class MapHandler implements OnMapReadyCallback {
         }
     }
 
-
-
-    private PolylineOptions createParallelLine(PolylineOptions originalLine, double parallelDistance) {
-        List<LatLng> originalPoints = originalLine.getPoints();
-        LatLng startPoint = originalPoints.get(0);
-        LatLng endPoint = originalPoints.get(1);
-
-        double angle = Math.atan2(endPoint.latitude - startPoint.latitude, endPoint.longitude - startPoint.longitude);
-        double offsetX = parallelDistance * Math.sin(angle);
-        double offsetY = parallelDistance * Math.cos(angle);
-
-        LatLng parallelStart = new LatLng(startPoint.latitude + offsetX, startPoint.longitude - offsetY);
-        LatLng parallelEnd = new LatLng(endPoint.latitude + offsetX, endPoint.longitude - offsetY);
-
-        return new PolylineOptions().add(parallelStart).add(parallelEnd).color(originalLine.getColor()).width(originalLine.getWidth());
-    }
-
     private double calculateDistance(LatLng pointA, LatLng pointB) {
         double earthRadius = 6371000; // meters
         double dLat = Math.toRadians(pointB.latitude - pointA.latitude);
@@ -171,8 +197,6 @@ public class MapHandler implements OnMapReadyCallback {
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return earthRadius * c;
     }
-
-
 
     public void stopTrail() {
         if (trail != null) {
@@ -190,10 +214,6 @@ public class MapHandler implements OnMapReadyCallback {
             }
         }
     }
-
-
-
-
 
     public void drawTrail(List<LatLng> points) {
         if (trail != null) {
@@ -246,6 +266,13 @@ public class MapHandler implements OnMapReadyCallback {
     public void updateMarker(double latitude, double longitude) {
         LatLng latLng = new LatLng(latitude, longitude);
 
+
+        if (map == null) {
+            // Log a message or handle the case when the map is not ready yet.
+            Log.d("MapHandler", "updateMarker: map is not ready yet");
+            return;
+        }
+
         if (marker != null) {
             marker.remove();
         }
@@ -261,7 +288,9 @@ public class MapHandler implements OnMapReadyCallback {
             trailPoints.add(latLng);
             trail.setPoints(trailPoints);
         }
+
         trailDatabaseHelper.addPoint(latitude, longitude);
+        highlightClosestLine();
 
     }
 
@@ -295,9 +324,7 @@ public class MapHandler implements OnMapReadyCallback {
             @Override
             public void onCameraMove() {
                 float currentZoom = map.getCameraPosition().zoom;
-                if (trail != null) {
-                    trail.setWidth(polylineWidthInMeters / (float) Math.pow(2, DEFAULT_ZOOM - currentZoom));
-                }
+
             }
         });
         map.setOnCameraIdleListener(new GoogleMap.OnCameraIdleListener() {
@@ -306,9 +333,11 @@ public class MapHandler implements OnMapReadyCallback {
                 LatLngBounds visibleBounds = map.getProjection().getVisibleRegion().latLngBounds;
                 List<LatLng> visiblePoints = trailDatabaseHelper.getPoints(visibleBounds);
                 drawTrail(visiblePoints);
+                if (pointAMarker != null && pointBMarker != null) {
+                    drawParallelLines(pointAMarker.getPosition(), pointBMarker.getPosition(), userDefinedWidth, visibleBounds);
+                }
             }
         });
+
     }
-
-
 }
