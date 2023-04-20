@@ -1,6 +1,5 @@
 package com.example.bing;
 
-import android.content.Context;
 import android.graphics.Color;
 import android.util.Log;
 
@@ -21,7 +20,6 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class MapHandler implements OnMapReadyCallback {
@@ -42,7 +40,8 @@ public class MapHandler implements OnMapReadyCallback {
     private boolean isRecordingTrail = false;
     private Polyline highlightedLine;
     private float userDefinedWidth;
-
+    private static final int NUM_OF_PARALLEL_LINES = 5;
+    private int highlightedLineIndex = 0;
     public void setRecordingTrail(boolean isRecordingTrail) {
         this.isRecordingTrail = isRecordingTrail;
     }
@@ -136,41 +135,7 @@ public class MapHandler implements OnMapReadyCallback {
     }
 
 
-    private void highlightClosestLine() {
-        if (marker == null || parallelLines.isEmpty()) {
-            return;
-        }
 
-        Polyline closestLine = null;
-        double minDistance = Double.MAX_VALUE;
-        LatLng currentPosition = marker.getPosition();
-
-        for (Polyline line : parallelLines) {
-            List<LatLng> points = line.getPoints();
-            if (points.size() != 2) {
-                continue;
-            }
-            LatLng startPoint = points.get(0);
-            LatLng endPoint = points.get(1);
-
-            double distance = PolyUtil.distanceToLine(currentPosition, startPoint, endPoint);
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestLine = line;
-            }
-        }
-
-        if (closestLine != null) {
-            // Reset the color of the previously highlighted line
-            if (highlightedLine != null) {
-                highlightedLine.setColor(Color.BLACK);
-            }
-
-            // Highlight the closest line
-            closestLine.setColor(Color.RED);
-            highlightedLine = closestLine;
-        }
-    }
 
 
 
@@ -340,4 +305,106 @@ public class MapHandler implements OnMapReadyCallback {
         });
 
     }
+
+    private void highlightClosestLine() {
+        if (marker == null || parallelLines.isEmpty()) {
+            return;
+        }
+
+        Polyline closestLine = null;
+        double minDistance = Double.MAX_VALUE;
+        LatLng currentPosition = marker.getPosition();
+        int closestLineIndex = 0;
+
+        for (int i = 0; i < parallelLines.size(); i++) {
+            Polyline line = parallelLines.get(i);
+            List<LatLng> points = line.getPoints();
+            if (points.size() != 2) {
+                continue;
+            }
+            LatLng startPoint = points.get(0);
+            LatLng endPoint = points.get(1);
+
+            double distance = PolyUtil.distanceToLine(currentPosition, startPoint, endPoint);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestLine = line;
+                closestLineIndex = i;
+            }
+        }
+
+        if (closestLine != null) {
+            // Reset the color of the previously highlighted line
+            if (highlightedLine != null) {
+                highlightedLine.setColor(Color.BLACK);
+            }
+
+            // Highlight the closest line
+            closestLine.setColor(Color.RED);
+            highlightedLine = closestLine;
+
+            if (closestLineIndex == 0 || closestLineIndex == parallelLines.size() - 1) {
+                // The marker is on the leftmost or rightmost line, update the lines accordingly
+                updateParallelLines(closestLineIndex);
+            }
+        }
+
+        if (closestLineIndex < parallelLines.size() - 1) {
+            // If the current highlighted line is not the last line, update the color of the next line
+            Polyline nextLine = parallelLines.get(closestLineIndex + 1);
+            nextLine.setColor(Color.YELLOW);
+        }
+    }
+    private void updateParallelLines(int index) {
+        if (index == 0 || index == parallelLines.size() - 1) {
+            Polyline newLine = null;
+
+            if (index == 0 && parallelLines.size() > 1) {
+                Polyline firstLine = parallelLines.get(0);
+                List<LatLng> firstLinePoints = firstLine.getPoints();
+
+                double dx = firstLinePoints.get(1).longitude - firstLinePoints.get(0).longitude;
+                double dy = firstLinePoints.get(1).latitude - firstLinePoints.get(0).latitude;
+                LatLng newStartPoint = new LatLng(firstLinePoints.get(0).latitude - dy, firstLinePoints.get(0).longitude - dx);
+                LatLng newEndPoint = new LatLng(firstLinePoints.get(1).latitude - dy, firstLinePoints.get(1).longitude - dx);
+
+                newLine = map.addPolyline(new PolylineOptions()
+                        .add(newStartPoint, newEndPoint)
+                        .width(3)
+                        .color(Color.BLACK));
+            } else if (index == parallelLines.size() - 1 && parallelLines.size() > 1) {
+                Polyline lastLine = parallelLines.get(parallelLines.size() - 1);
+                List<LatLng> lastLinePoints = lastLine.getPoints();
+
+                double dx = lastLinePoints.get(1).longitude - lastLinePoints.get(0).longitude;
+                double dy = lastLinePoints.get(1).latitude - lastLinePoints.get(0).latitude;
+                LatLng newStartPoint = new LatLng(lastLinePoints.get(0).latitude + dy, lastLinePoints.get(0).longitude + dx);
+                LatLng newEndPoint = new LatLng(lastLinePoints.get(1).latitude + dy, lastLinePoints.get(1).longitude + dx);
+
+                newLine = map.addPolyline(new PolylineOptions()
+                        .add(newStartPoint, newEndPoint)
+                        .width(3)
+                        .color(Color.BLACK));
+            }
+
+            // Remove the line at the opposite end
+            int removeIndex = index == 0 ? parallelLines.size() - 1 : 0;
+            Polyline lineToRemove = parallelLines.get(removeIndex);
+            lineToRemove.remove();
+            parallelLines.remove(removeIndex);
+
+            if (newLine != null) {
+                if (index == 0) {
+                    parallelLines.add(0, newLine);
+                } else {
+                    parallelLines.add(newLine);
+                }
+            }
+        }
+    }
+
+
+
+
+
 }

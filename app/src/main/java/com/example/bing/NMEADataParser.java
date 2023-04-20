@@ -42,7 +42,7 @@ public class NMEADataParser {
         if (sentenceParts[0].length() < 3) {
             return null;
         }
-        System.out.println("data: " + data);
+        //System.out.println("data: " + data);
 
         // Obtém o tipo de sentença
 
