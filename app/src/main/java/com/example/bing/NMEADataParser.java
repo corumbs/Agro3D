@@ -7,8 +7,6 @@ import java.util.Arrays;
 public class NMEADataParser {
 // Interface a ser implementada por classes que desejam receber dados NMEA analisados
 
-    private static NMEADataListener nmeaDataListener;
-
 
     public interface NMEADataListener {
         // Método a ser chamado quando os dados NMEA são analisados
@@ -18,7 +16,6 @@ public class NMEADataParser {
 // Defina o ouvinte de dados NMEA para este analisador
 
     public void setNMEADataListener(NMEADataListener listener) {
-        this.nmeaDataListener = listener;
     }
     // Classe para armazenar os dados GGA analisados
     public static class ParsedGGAData {

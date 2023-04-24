@@ -29,6 +29,7 @@ public class TrailDatabaseHelper extends SQLiteOpenHelper {
     public void stopRecordingTrail() {
         isRecordingTrail = false;
     }
+    //um banco de dados que ajuda a quardar os pontos do tracejado
     public TrailDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
@@ -52,7 +53,7 @@ public class TrailDatabaseHelper extends SQLiteOpenHelper {
         db.delete(TABLE_TRAIL, null, null);
         db.close();
     }
-
+//lembra da posicao dos pontos
     public void addPoint(double latitude, double longitude) {
         if (isRecordingTrail) {
             SQLiteDatabase db = this.getWritableDatabase();
@@ -64,7 +65,7 @@ public class TrailDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-
+//carrega os pontos salvos
     public List<LatLng> getPoints(LatLngBounds bounds) {
         List<LatLng> points = new ArrayList<>();
         String selectQuery = "SELECT * FROM " + TABLE_TRAIL;

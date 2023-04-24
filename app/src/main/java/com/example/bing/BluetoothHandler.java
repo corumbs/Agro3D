@@ -33,7 +33,7 @@ public class BluetoothHandler {
     private BluetoothDevice findPairedDevice() {
         Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
 
-        // If there are paired devices, look for the desired device
+        // Se achar aparelhos conectados, confere se ele e o desejado
         if (pairedDevices.size() > 0) {
             for (BluetoothDevice device : pairedDevices) {
                 if (device.getName().equals(deviceName)) {
@@ -117,13 +117,13 @@ public class BluetoothHandler {
     }
     private void attemptReconnect() {
         try {
-            // Wait for a while before trying to reconnect
+            // espera um pouco e tenta reconectar
             Thread.sleep(RECONNECT_DELAY);
         } catch (InterruptedException e) {
             Log.e(TAG, "Reconnect delay interrupted", e);
         }
 
-        // Start a new connection
+        // comeca uma nova coneccao
         connect();
     }
 

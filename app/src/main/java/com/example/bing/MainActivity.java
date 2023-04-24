@@ -22,7 +22,7 @@ import android.content.SharedPreferences;
 public class MainActivity extends AppCompatActivity implements NMEADataParser.NMEADataListener {
     private TextView latitudeTextView;
     private TextView longitudeTextView;
-    private TextView nmeaTextView;
+
     private MapHandler mapHandler;
     private NMEADataParser nmeaDataParser;
     private boolean isTrailActive = false;
@@ -60,7 +60,7 @@ public class MainActivity extends AppCompatActivity implements NMEADataParser.NM
 
         EditText polylineWidthEditText = findViewById(R.id.polylineWidthEditText);
         Button setPolylineWidthButton = findViewById(R.id.setPolylineWidthButton);
-
+        //butao para definir a largura do tracejado
         setPolylineWidthButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -76,6 +76,7 @@ public class MainActivity extends AppCompatActivity implements NMEADataParser.NM
             }
         });
         Button toggleMapViewButton = findViewById(R.id.toggleMapViewButton);
+        //butao que muda o tipo da visao entre normal e satelite
         toggleMapViewButton.setOnClickListener(new View.OnClickListener() {
             private boolean isSatelliteView = false;
 
@@ -94,7 +95,7 @@ public class MainActivity extends AppCompatActivity implements NMEADataParser.NM
 
 
         Button placePointsButton = findViewById(R.id.placePointsButton);
-
+        //butao que cria A e B
         placePointsButton.setOnClickListener(new View.OnClickListener() {
             boolean pointAAdded = false;
 
@@ -111,7 +112,7 @@ public class MainActivity extends AppCompatActivity implements NMEADataParser.NM
                 pointAAdded = !pointAAdded;
             }
         });
-
+        //butao de comecar e para o tracejado
         startStopTrailButton.setOnClickListener(new View.OnClickListener() {
             private boolean isTracing = false;
 
@@ -128,7 +129,7 @@ public class MainActivity extends AppCompatActivity implements NMEADataParser.NM
             }
         });
 
-
+        //butao de limpar o tracejado
         Button clearTrailButton = findViewById(R.id.clearTrailButton);
         clearTrailButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -141,7 +142,7 @@ public class MainActivity extends AppCompatActivity implements NMEADataParser.NM
 
 
 
-        // Set up the Bluetooth connection
+        // prepara a conecao bluetooth
         setupBluetooth();
         Button centerButton = findViewById(R.id.centerButton);
         centerButton.setOnClickListener(new View.OnClickListener() {
@@ -154,38 +155,38 @@ public class MainActivity extends AppCompatActivity implements NMEADataParser.NM
 
 
 
-        // Add the zoom in button and its click listener
+        // butao de zoom
         Button zoomInButton = findViewById(R.id.zoomInButton);
         zoomInButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                setMapScale(2); // Replace 2 with the desired scale factor for zooming in
+                setMapScale(2); //da o zoom
             }
         });
 
-        // Add the zoom out button and its click listener
+        // butao de tirar o zoom
         Button zoomOutButton = findViewById(R.id.zoomOutButton);
         zoomOutButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                setMapScale(1); // Set the scale factor to 1 for zooming out (original scale)
+                setMapScale(1); // tira o zoom
             }
         });
-        trailDatabaseHelper = new TrailDatabaseHelper(this);
 
     }
+    //metodo que salva a largura do tracejado
     private void savePolylineWidth(float polylineWidth) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         SharedPreferences.Editor editor = prefs.edit();
         editor.putFloat(PREFS_POLYLINE_WIDTH, polylineWidth);
         editor.apply();
     }
-
+    //carrega a largura da polyline
     private float loadPolylineWidth() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         return prefs.getFloat(PREFS_POLYLINE_WIDTH, 10); // Default value is 10
     }
-
+    //prepara a escala do mapa
     private void setMapScale(float scale) {
         FrameLayout mapContainer = findViewById(R.id.map_container);
         mapContainer.setScaleX(scale);
@@ -244,7 +245,7 @@ public class MainActivity extends AppCompatActivity implements NMEADataParser.NM
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        // Do any custom handling if needed, otherwise leave it empty
+
     }
 
     // Chamado quando o NMEADataParser termina de analisar uma sentença, atualiza o latitudeTextView e o longitudeTextView
